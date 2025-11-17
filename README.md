@@ -1,4 +1,4 @@
-# SQL Query Buddy �
+# SQL Query Buddy 
 
 **Conversational AI for Smart Data Insights** - A RAG-powered system that converts natural language questions into SQL queries, executes them, and provides AI-driven insights.
 
