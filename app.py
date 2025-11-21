@@ -40,11 +40,45 @@ def verify_openai_api_key():
         """
         raise ValueError(error_msg)
     
-    if not api_key.startswith("sk-"):
-        print(f"⚠️  WARNING: API key doesn't start with 'sk-'. Got: {api_key[:10]}...")
-        print("This might not be a valid OpenAI API key format.")
+    # Clean the API key (remove whitespace)
+    api_key = api_key.strip()
     
-    print(f"✅ OpenAI API key found: {api_key[:10]}...{api_key[-4:]}")
+    # Check format
+    if not api_key.startswith("sk-"):
+        error_msg = f"""
+        ❌ ERROR: Invalid API key format!
+        
+        API key must start with 'sk-'
+        Got: {api_key[:20]}...
+        
+        Common issues:
+        - Extra spaces before/after the key
+        - Quotes around the key (remove them)
+        - Wrong key copied
+        
+        In Hugging Face Spaces:
+        - Make sure there are NO spaces before or after the key value
+        - Do NOT include quotes around the key
+        - The full key should be about 51 characters long
+        """
+        raise ValueError(error_msg)
+    
+    # Check length (OpenAI keys are typically 51 characters)
+    if len(api_key) < 40:
+        error_msg = f"""
+        ❌ ERROR: API key appears to be incomplete!
+        
+        API key length: {len(api_key)} characters
+        Expected: ~51 characters
+        
+        The key might be truncated. Make sure you copied the FULL key.
+        """
+        raise ValueError(error_msg)
+    
+    # Set the cleaned key back to environment
+    os.environ["OPENAI_API_KEY"] = api_key
+    
+    print(f"✅ OpenAI API key found: {api_key[:10]}...{api_key[-4:]} (length: {len(api_key)})")
     return api_key
 
 

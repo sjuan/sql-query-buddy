@@ -53,11 +53,30 @@ class VectorStoreManager:
         self.database_url = database_url
         self.vector_db_path = vector_db_path
         self.embedding_model = embedding_model
+        
+        # Verify API key is set before creating embeddings
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "OPENAI_API_KEY not found! Please set it in Hugging Face Spaces "
+                "Settings → Variables and secrets → Repository secrets"
+            )
+        
+        # Clean the API key
+        api_key = api_key.strip()
+        os.environ["OPENAI_API_KEY"] = api_key
+        
         # Try new parameter name first, fallback to old
         try:
-            self.embeddings = OpenAIEmbeddings(model=embedding_model)
+            self.embeddings = OpenAIEmbeddings(
+                model=embedding_model,
+                openai_api_key=api_key  # Explicitly pass the key
+            )
         except TypeError:
-            self.embeddings = OpenAIEmbeddings(model_name=embedding_model)
+            self.embeddings = OpenAIEmbeddings(
+                model_name=embedding_model,
+                openai_api_key=api_key  # Explicitly pass the key
+            )
         self.schema_loader = SchemaLoader(database_url)
         self.vectorstore: Optional[Chroma] = None
         

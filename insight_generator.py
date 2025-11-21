@@ -4,6 +4,7 @@ Generates AI-driven insights from query results.
 """
 
 from typing import Dict, Any, Optional
+import os
 try:
     from langchain_openai import ChatOpenAI
 except ImportError:
@@ -34,11 +35,26 @@ class InsightGenerator:
             model_name: OpenAI model name
             temperature: LLM temperature (higher for more creative insights)
         """
+        # Verify and get API key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not found! Please set it in Space secrets.")
+        api_key = api_key.strip()
+        os.environ["OPENAI_API_KEY"] = api_key
+        
         # Try new parameter name first, fallback to old
         try:
-            self.llm = ChatOpenAI(model=model_name, temperature=temperature)
+            self.llm = ChatOpenAI(
+                model=model_name, 
+                temperature=temperature,
+                openai_api_key=api_key  # Explicitly pass the key
+            )
         except TypeError:
-            self.llm = ChatOpenAI(model_name=model_name, temperature=temperature)
+            self.llm = ChatOpenAI(
+                model_name=model_name, 
+                temperature=temperature,
+                openai_api_key=api_key  # Explicitly pass the key
+            )
         
         # Store system prompt for insights
         self.insight_system_prompt = """You are a data analyst AI that provides insightful interpretations of query results.
