@@ -1,6 +1,65 @@
+---
+title: SQL Query Buddy
+emoji: 🤖
+colorFrom: blue
+colorTo: purple
+sdk: gradio
+sdk_version: 4.8.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # SQL Query Buddy 🤖
 
 **Conversational AI for Smart Data Insights** - A RAG-powered system that converts natural language questions into SQL queries, executes them, and provides AI-driven insights.
+
+## 🚀 Hugging Face Spaces
+
+This app is ready to deploy on Hugging Face Spaces! 
+
+### Deployment Steps:
+
+1. **Create a new Space**
+   - Go to https://huggingface.co/spaces
+   - Click "Create new Space"
+   - Name: `sql-query-buddy`
+   - SDK: Select **Gradio**
+   - Hardware: CPU basic (free) or upgrade
+
+2. **Push your code**
+   ```bash
+   git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/sql-query-buddy
+   git push hf main
+   ```
+
+3. **⚠️ IMPORTANT: Set OpenAI API Key**
+   - Go to your Space Settings (⚙️ icon)
+   - Click **"Variables and secrets"** tab
+   - Under **"Repository secrets"**, click **"+ New secret"**
+   - Name: `OPENAI_API_KEY` (must be exact, case-sensitive!)
+   - Value: Your OpenAI API key (starts with `sk-`)
+   - Click **"Save secret"**
+   - **Restart your Space** (click restart button)
+
+4. **Verify Setup**
+   - Check the **Logs** tab - you should see: `✅ OpenAI API key found: sk-xxxxx...xxxx`
+   - If you see an error, check `HF_SPACES_API_KEY_TROUBLESHOOTING.md`
+
+5. **Use the App**
+   - The app will automatically create a sample database on first run
+   - Vector store will be built automatically
+   - Ask questions in natural language!
+
+### 🔑 API Key Troubleshooting
+
+If your API key is not being accepted, see: **`HF_SPACES_API_KEY_TROUBLESHOOTING.md`**
+
+Common issues:
+- ❌ Secret name not exact: `OPENAI_API_KEY` (must match exactly)
+- ❌ Not in "Repository secrets" section (must be secrets, not variables)
+- ❌ Space not restarted after adding secret
+- ❌ Extra spaces or quotes in the key value
 
 ## 🌟 Features
 

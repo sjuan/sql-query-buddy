@@ -15,6 +15,38 @@ from context_manager import ContextManager
 # Load environment variables
 load_dotenv()
 
+# Verify OpenAI API key is set
+def verify_openai_api_key():
+    """Verify that OpenAI API key is properly configured."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    
+    if not api_key:
+        error_msg = """
+        ❌ ERROR: OPENAI_API_KEY not found!
+        
+        For Hugging Face Spaces:
+        1. Go to your Space Settings
+        2. Click "Variables and secrets"
+        3. Add a new secret:
+           - Name: OPENAI_API_KEY
+           - Value: your OpenAI API key (starts with 'sk-')
+        4. Restart your Space
+        
+        For local development:
+        - Create a .env file with: OPENAI_API_KEY=your_key_here
+        - Or set environment variable: export OPENAI_API_KEY=your_key_here
+        
+        Get your API key from: https://platform.openai.com/api-keys
+        """
+        raise ValueError(error_msg)
+    
+    if not api_key.startswith("sk-"):
+        print(f"⚠️  WARNING: API key doesn't start with 'sk-'. Got: {api_key[:10]}...")
+        print("This might not be a valid OpenAI API key format.")
+    
+    print(f"✅ OpenAI API key found: {api_key[:10]}...{api_key[-4:]}")
+    return api_key
+
 
 class SQLQueryBuddy:
     """Main application class for SQL Query Buddy."""
@@ -408,14 +440,53 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
 
 
 if __name__ == "__main__":
+    # Verify API key is set before proceeding
+    try:
+        verify_openai_api_key()
+    except ValueError as e:
+        print(str(e))
+        # For HF Spaces, show error in the interface
+        if os.getenv("SPACE_ID"):
+            with gr.Blocks(title="SQL Query Buddy - Configuration Error") as error_demo:
+                gr.Markdown(f"""
+                # ⚠️ Configuration Error
+                
+                {str(e)}
+                
+                **Quick Fix for Hugging Face Spaces:**
+                1. Go to your Space Settings → Variables and secrets
+                2. Add secret: `OPENAI_API_KEY` = your API key
+                3. Click "Save" and restart the Space
+                """)
+            error_demo.launch()
+        exit(1)
+    
     # Get database URL from environment or use default
     database_url = os.getenv("DATABASE_URL", "sqlite:///sample_database.db")
     vector_db_path = os.getenv("VECTOR_DB_PATH", "./vector_store")
+    
+    # Create sample database if it doesn't exist (for HF Spaces)
+    if database_url.startswith("sqlite:///"):
+        db_path = database_url.replace("sqlite:///", "")
+        if not os.path.exists(db_path):
+            print("Creating sample database...")
+            try:
+                from setup_sample_database import create_sample_database
+                create_sample_database(db_path)
+                print(f"Sample database created at {db_path}")
+            except Exception as e:
+                print(f"Warning: Could not create sample database: {e}")
     
     print(f"Connecting to database: {database_url}")
     print(f"Vector store path: {vector_db_path}")
     
     # Create and launch interface
     demo = create_interface(database_url, vector_db_path)
-    demo.launch(share=False, server_name="0.0.0.0", server_port=7860)
+    
+    # For Hugging Face Spaces, use simple launch (HF handles server settings)
+    # For local development, you can specify custom settings
+    if os.getenv("SPACE_ID"):  # Running on HF Spaces
+        demo.launch()
+    else:
+        demo.launch(share=False, server_name="0.0.0.0", server_port=7860)
 
