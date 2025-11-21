@@ -377,6 +377,7 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
                     placeholder="Enter your OpenAI API key (starts with sk-)",
                     type="password",
                     visible=True,  # Always visible initially
+                    value="",  # Explicitly set initial value
                     info="🔒 **Security**: Your API key is stored only in this session's memory and will be cleared when you close the app. Get your key from https://platform.openai.com/api-keys"
                 )
                 with gr.Row():
@@ -634,12 +635,22 @@ If the problem persists, please check the Space logs."""
         # Wrapper function to handle API key input (handle None/empty values)
         def on_api_key_submit(api_key_value, current_buddy):
             """Wrapper to ensure API key is properly handled."""
+            # Debug logging (will show in HF Spaces logs)
+            print(f"DEBUG: on_api_key_submit called")
+            print(f"DEBUG: api_key_value type: {type(api_key_value)}, value: {'*' * min(10, len(str(api_key_value)) if api_key_value else 0)}")
+            
             # Handle None or empty values from password field
             if api_key_value is None:
+                print("DEBUG: api_key_value is None, converting to empty string")
                 api_key_value = ""
+            
             # Convert to string and strip
             api_key_value = str(api_key_value).strip() if api_key_value else ""
-            return initialize_app(api_key_value, current_buddy)
+            print(f"DEBUG: After processing, api_key_value length: {len(api_key_value)}")
+            
+            result = initialize_app(api_key_value, current_buddy)
+            print(f"DEBUG: initialize_app returned {len(result)} outputs")
+            return result
         
         # API key submit handler
         api_key_submit.click(
