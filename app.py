@@ -244,29 +244,14 @@ class SQLQueryBuddy:
 def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
     """Create and launch Gradio interface."""
     
-    # Check if API key is already set
-    api_key_set = bool(os.getenv("OPENAI_API_KEY"))
-    
-    # Initialize buddy if API key is already set (from environment/secrets)
-    # Note: For public apps, prefer user input over environment variables
+    # For public deployment, always require user to enter API key
+    # Don't auto-initialize from environment - let users enter their own key
     initial_buddy = None
-    if api_key_set:
-        try:
-            api_key = os.getenv("OPENAI_API_KEY", "").strip()
-            if api_key.startswith("sk-") and len(api_key) >= 40:
-                initial_buddy = SQLQueryBuddy(
-                    database_url=database_url,
-                    api_key=api_key,  # Pass as parameter, not via environment
-                    vector_db_path=vector_db_path
-                )
-                print("✅ App initialized with API key from environment")
-        except Exception as e:
-            print(f"Warning: Could not initialize with existing API key: {e}")
-            initial_buddy = None
+    initial_api_key = ""
     
     # Store for session (will be initialized when API key is provided)
     buddy_state = gr.State(value=initial_buddy)
-    api_key_state = gr.State(value=os.getenv("OPENAI_API_KEY", ""))
+    api_key_state = gr.State(value=initial_api_key)
     
     # Create Gradio interface with dark mode support
     with gr.Blocks(title="SQL Query Buddy", theme=gr.themes.Soft()) as demo:
@@ -372,21 +357,21 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
         }
         """
         
-        # API Key Input Section (shown if not set)
+        # API Key Input Section (always visible initially)
         with gr.Row():
             with gr.Column():
                 api_key_input = gr.Textbox(
                     label="🔑 OpenAI API Key",
                     placeholder="Enter your OpenAI API key (starts with sk-)",
                     type="password",
-                    visible=not api_key_set,
+                    visible=True,  # Always visible initially
                     info="🔒 **Security**: Your API key is stored only in this session's memory and will be cleared when you close the app. Get your key from https://platform.openai.com/api-keys"
                 )
                 with gr.Row():
-                    api_key_submit = gr.Button("Set API Key", variant="primary", visible=not api_key_set)
-                    api_key_clear = gr.Button("Clear API Key", variant="stop", visible=api_key_set)
+                    api_key_submit = gr.Button("Set API Key", variant="primary", visible=True)  # Always visible initially
+                    api_key_clear = gr.Button("Clear API Key", variant="stop", visible=False)  # Hidden initially
                 api_key_status = gr.Markdown(
-                    value="⚠️ **API Key Required**: Please enter your OpenAI API key to use this app. Your key will NOT be saved or persisted." if not api_key_set else "✅ API key is set for this session only.",
+                    value="⚠️ **API Key Required**: Please enter your OpenAI API key to use this app. Your key will NOT be saved or persisted.",
                     visible=True
                 )
         
