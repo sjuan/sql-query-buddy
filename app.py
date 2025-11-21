@@ -261,12 +261,12 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
     initial_buddy = None
     initial_api_key = ""
     
-    # Store for session (will be initialized when API key is provided)
-    buddy_state = gr.State(value=initial_buddy)
-    api_key_state = gr.State(value=initial_api_key)
-    
     # Create Gradio interface with dark mode support
     with gr.Blocks(title="SQL Query Buddy", theme=gr.themes.Soft()) as demo:
+        # Store for session (will be initialized when API key is provided)
+        # State components must be created inside Blocks context
+        buddy_state = gr.State(value=initial_buddy)
+        api_key_state = gr.State(value=initial_api_key)
         # Add custom CSS for dark mode and improved contrast
         demo.css = """
         /* Light mode - improved contrast for text areas */
