@@ -135,10 +135,22 @@ class SQLQueryBuddy:
         )
         self.context_manager = ContextManager(max_history=20)
         
+        # Ensure vector store directory exists
+        if vector_db_path:
+            os.makedirs(vector_db_path, exist_ok=True)
+        
         # Build vector store on initialization
-        print("Initializing vector store...")
-        self.vector_store_manager.build_vector_store(include_samples=True)
-        print("Vector store ready!")
+        # Wrap in try-except to provide better error messages
+        try:
+            print("Initializing vector store...")
+            self.vector_store_manager.build_vector_store(include_samples=True)
+            print("Vector store ready!")
+        except Exception as e:
+            error_msg = f"Error building vector store: {str(e)}"
+            print(f"⚠️ Warning: {error_msg}")
+            # Don't fail initialization - vector store can be built lazily
+            # But log the error for debugging
+            raise ValueError(f"Failed to initialize vector store. This may be due to database connection issues or insufficient permissions. Error: {str(e)}")
     
     def process_query(self, question: str, history: list) -> tuple:
         """
@@ -475,6 +487,18 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
                        "❌ API key appears incomplete. Please check and try again.", gr.update(visible=True), gr.update(visible=False))
             
             try:
+                # Ensure database exists before initialization
+                if database_url.startswith("sqlite:///"):
+                    db_path = database_url.replace("sqlite:///", "")
+                    if not os.path.exists(db_path):
+                        try:
+                            from setup_sample_database import create_sample_database
+                            create_sample_database(db_path)
+                        except Exception as db_error:
+                            error_msg = f"❌ Error creating database: {str(db_error)}\n\nPlease check the logs for details."
+                            return (None, "", gr.update(visible=True), gr.update(visible=True), error_msg,
+                                   gr.update(visible=True), gr.update(visible=False))
+                
                 # Initialize SQLQueryBuddy with API key as parameter
                 # Key is stored only in memory (session state), not persisted
                 new_buddy = SQLQueryBuddy(
@@ -486,8 +510,66 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
                 return (new_buddy, api_key, gr.update(visible=False), gr.update(visible=False), 
                        "✅ API key set! App initialized successfully. **Note:** Your API key is stored only in this session and will be cleared when you close the app.",
                        gr.update(visible=False), gr.update(visible=True))
+            except ValueError as ve:
+                # Handle validation errors
+                error_msg = f"❌ Validation Error: {str(ve)}"
+                return (None, "", gr.update(visible=True), gr.update(visible=True), error_msg,
+                       gr.update(visible=True), gr.update(visible=False))
             except Exception as e:
-                error_msg = f"❌ Error initializing app: {str(e)}"
+                # Handle other errors with detailed message
+                import traceback
+                error_details = str(e)
+                error_type = type(e).__name__
+                
+                # Provide user-friendly error messages
+                if "AuthenticationError" in error_type or "401" in error_details:
+                    error_msg = f"""❌ **API Key Authentication Failed**
+
+The API key you provided was rejected by OpenAI. This usually means:
+- The key is invalid or expired
+- The key has been revoked
+- There are extra spaces or characters in the key
+
+**Please check:**
+1. Copy the key exactly from https://platform.openai.com/api-keys
+2. Make sure there are no spaces before or after the key
+3. Verify the key starts with `sk-` and is about 51 characters long
+4. Check if the key has usage limits or restrictions
+
+**Error details:** {error_details[:200]}"""
+                elif "RateLimitError" in error_type or "429" in error_details:
+                    error_msg = f"""❌ **Rate Limit Exceeded**
+
+OpenAI API rate limit reached. Please:
+- Wait a few minutes and try again
+- Check your OpenAI account usage limits
+- Consider upgrading your OpenAI plan
+
+**Error details:** {error_details[:200]}"""
+                elif "database" in error_details.lower() or "connection" in error_details.lower():
+                    error_msg = f"""❌ **Database Error**
+
+Could not connect to or initialize the database:
+{error_details[:300]}
+
+**Please check:**
+- Database file permissions
+- Database path is correct
+- Sufficient disk space available"""
+                else:
+                    error_msg = f"""❌ **Initialization Error**
+
+An error occurred while initializing the app:
+**Error Type:** {error_type}
+**Error Message:** {error_details[:300]}
+
+**Troubleshooting:**
+1. Check the Hugging Face Space logs for more details
+2. Verify your API key is correct
+3. Try refreshing the page and entering the key again
+
+If the problem persists, please check the Space logs."""
+                
                 return (None, "", gr.update(visible=True), gr.update(visible=True), error_msg,
                        gr.update(visible=True), gr.update(visible=False))
         
