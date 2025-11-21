@@ -4,7 +4,7 @@ emoji: 🤖
 colorFrom: blue
 colorTo: purple
 sdk: gradio
-sdk_version: 4.8.0
+sdk_version: 5.49.1
 app_file: app.py
 pinned: false
 license: mit
@@ -301,4 +301,3 @@ For issues, questions, or contributions, please open an issue on GitHub.
 ---
 
 **Happy Querying! 🚀**
-
