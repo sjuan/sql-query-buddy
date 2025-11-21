@@ -470,7 +470,7 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
             """Initialize SQLQueryBuddy with provided API key."""
             if current_buddy is not None:
                 return (current_buddy, api_key if api_key else "", gr.update(visible=False), gr.update(visible=False), 
-                       "✅ API key already set!", gr.update(visible=False), gr.update(visible=True))
+                       "✅ API key already set!", gr.update(visible=True))  # Show clear button
             
             # Handle None or empty string
             if api_key is None:
@@ -527,7 +527,7 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
                 
                 return (new_buddy, final_api_key, gr.update(visible=False, value=""), gr.update(visible=False), 
                        "✅ API key set! App initialized successfully. **Note:** Your API key is stored only in this session and will be cleared when you close the app.",
-                       gr.update(visible=False), gr.update(visible=True))
+                       gr.update(visible=True))  # Show clear button
             except ValueError as ve:
                 # Handle validation errors
                 error_msg = f"❌ Validation Error: {str(ve)}"
