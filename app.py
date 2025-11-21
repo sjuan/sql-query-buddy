@@ -468,14 +468,19 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
         def initialize_app(api_key: str, current_buddy):
             """Initialize SQLQueryBuddy with provided API key."""
             if current_buddy is not None:
-                return (current_buddy, api_key, gr.update(visible=False), gr.update(visible=False), 
+                return (current_buddy, api_key if api_key else "", gr.update(visible=False), gr.update(visible=False), 
                        "✅ API key already set!", gr.update(visible=False), gr.update(visible=True))
             
-            if not api_key or not api_key.strip():
+            # Handle None or empty string
+            if api_key is None:
+                api_key = ""
+            
+            # Strip whitespace
+            api_key = str(api_key).strip()
+            
+            if not api_key:
                 return (None, "", gr.update(visible=True), gr.update(visible=True), 
                        "❌ Please enter a valid API key.", gr.update(visible=True), gr.update(visible=False))
-            
-            api_key = api_key.strip()
             
             # Validate key format
             if not api_key.startswith("sk-"):
@@ -485,6 +490,11 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
             if len(api_key) < 40:
                 return (None, "", gr.update(visible=True), gr.update(visible=True), 
                        "❌ API key appears incomplete. Please check and try again.", gr.update(visible=True), gr.update(visible=False))
+            
+            # Final validation before passing to SQLQueryBuddy
+            if not api_key or len(api_key.strip()) == 0:
+                return (None, "", gr.update(visible=True), gr.update(visible=True), 
+                       "❌ API key is empty after processing. Please try again.", gr.update(visible=True), gr.update(visible=False))
             
             try:
                 # Ensure database exists before initialization
@@ -499,15 +509,22 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
                             return (None, "", gr.update(visible=True), gr.update(visible=True), error_msg,
                                    gr.update(visible=True), gr.update(visible=False))
                 
+                # Final check before initialization
+                final_api_key = api_key.strip()
+                
+                if not final_api_key:
+                    return (None, "", gr.update(visible=True), gr.update(visible=True), 
+                           "❌ API key validation failed. Please check your key and try again.", gr.update(visible=True), gr.update(visible=False))
+                
                 # Initialize SQLQueryBuddy with API key as parameter
                 # Key is stored only in memory (session state), not persisted
                 new_buddy = SQLQueryBuddy(
                     database_url=database_url,
-                    api_key=api_key,  # Pass directly, not via environment
+                    api_key=final_api_key,  # Pass directly, not via environment
                     vector_db_path=vector_db_path
                 )
                 
-                return (new_buddy, api_key, gr.update(visible=False), gr.update(visible=False), 
+                return (new_buddy, final_api_key, gr.update(visible=False, value=""), gr.update(visible=False), 
                        "✅ API key set! App initialized successfully. **Note:** Your API key is stored only in this session and will be cleared when you close the app.",
                        gr.update(visible=False), gr.update(visible=True))
             except ValueError as ve:
@@ -614,9 +631,19 @@ If the problem persists, please check the Space logs."""
                 return "⚠️ Please set your API key first to use this feature."
             return current_buddy.get_optimization_suggestions(sql_query)
         
+        # Wrapper function to handle API key input (handle None/empty values)
+        def on_api_key_submit(api_key_value, current_buddy):
+            """Wrapper to ensure API key is properly handled."""
+            # Handle None or empty values from password field
+            if api_key_value is None:
+                api_key_value = ""
+            # Convert to string and strip
+            api_key_value = str(api_key_value).strip() if api_key_value else ""
+            return initialize_app(api_key_value, current_buddy)
+        
         # API key submit handler
         api_key_submit.click(
-            fn=initialize_app,
+            fn=on_api_key_submit,
             inputs=[api_key_input, buddy_state],
             outputs=[buddy_state, api_key_state, api_key_input, api_key_submit, api_key_status, api_key_clear]
         )
