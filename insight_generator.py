@@ -25,6 +25,7 @@ class InsightGenerator:
     
     def __init__(
         self,
+        api_key: str,
         model_name: str = "gpt-4-turbo-preview",
         temperature: float = 0.3
     ):
@@ -32,28 +33,27 @@ class InsightGenerator:
         Initialize insight generator.
         
         Args:
+            api_key: OpenAI API key (stored only in memory, not persisted)
             model_name: OpenAI model name
             temperature: LLM temperature (higher for more creative insights)
         """
-        # Verify and get API key
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not found! Please set it in Space secrets.")
-        api_key = api_key.strip()
-        os.environ["OPENAI_API_KEY"] = api_key
+        if not api_key or not api_key.strip():
+            raise ValueError("API key is required")
+        
+        self.api_key = api_key.strip()  # Store in instance, not environment
         
         # Try new parameter name first, fallback to old
         try:
             self.llm = ChatOpenAI(
                 model=model_name, 
                 temperature=temperature,
-                openai_api_key=api_key  # Explicitly pass the key
+                openai_api_key=self.api_key  # Pass key directly, not via environment
             )
         except TypeError:
             self.llm = ChatOpenAI(
                 model_name=model_name, 
                 temperature=temperature,
-                openai_api_key=api_key  # Explicitly pass the key
+                openai_api_key=self.api_key  # Pass key directly, not via environment
             )
         
         # Store system prompt for insights

@@ -88,6 +88,7 @@ class SQLQueryBuddy:
     def __init__(
         self,
         database_url: str,
+        api_key: str,
         vector_db_path: str = "./vector_store",
         model_name: str = "gpt-4-turbo-preview",
         temperature: float = 0.1
@@ -97,17 +98,29 @@ class SQLQueryBuddy:
         
         Args:
             database_url: SQLAlchemy database URL
+            api_key: OpenAI API key (stored only in memory, not persisted)
             vector_db_path: Path to vector database
             model_name: OpenAI model name
             temperature: LLM temperature
         """
+        if not api_key or not api_key.strip():
+            raise ValueError("API key is required")
+        
         self.database_url = database_url
+        self.api_key = api_key.strip()  # Store in instance only, NOT in environment
+        
+        # SECURITY: API key is passed directly to components as parameters
+        # Components are updated to accept api_key parameter and use it directly
+        # This ensures the key is never persisted in environment variables
+        
         self.vector_store_manager = VectorStoreManager(
             database_url=database_url,
+            api_key=self.api_key,  # Pass directly, not via environment
             vector_db_path=vector_db_path
         )
         self.sql_generator = SQLGenerator(
             vector_store_manager=self.vector_store_manager,
+            api_key=self.api_key,  # Pass directly, not via environment
             model_name=model_name,
             temperature=temperature
         )
@@ -116,6 +129,7 @@ class SQLQueryBuddy:
             sql_generator=self.sql_generator
         )
         self.insight_generator = InsightGenerator(
+            api_key=self.api_key,  # Pass directly, not via environment
             model_name=model_name,
             temperature=0.3
         )
@@ -230,11 +244,29 @@ class SQLQueryBuddy:
 def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
     """Create and launch Gradio interface."""
     
-    # Initialize SQL Query Buddy
-    buddy = SQLQueryBuddy(
-        database_url=database_url,
-        vector_db_path=vector_db_path
-    )
+    # Check if API key is already set
+    api_key_set = bool(os.getenv("OPENAI_API_KEY"))
+    
+    # Initialize buddy if API key is already set (from environment/secrets)
+    # Note: For public apps, prefer user input over environment variables
+    initial_buddy = None
+    if api_key_set:
+        try:
+            api_key = os.getenv("OPENAI_API_KEY", "").strip()
+            if api_key.startswith("sk-") and len(api_key) >= 40:
+                initial_buddy = SQLQueryBuddy(
+                    database_url=database_url,
+                    api_key=api_key,  # Pass as parameter, not via environment
+                    vector_db_path=vector_db_path
+                )
+                print("✅ App initialized with API key from environment")
+        except Exception as e:
+            print(f"Warning: Could not initialize with existing API key: {e}")
+            initial_buddy = None
+    
+    # Store for session (will be initialized when API key is provided)
+    buddy_state = gr.State(value=initial_buddy)
+    api_key_state = gr.State(value=os.getenv("OPENAI_API_KEY", ""))
     
     # Create Gradio interface with dark mode support
     with gr.Blocks(title="SQL Query Buddy", theme=gr.themes.Soft()) as demo:
@@ -340,6 +372,24 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
         }
         """
         
+        # API Key Input Section (shown if not set)
+        with gr.Row():
+            with gr.Column():
+                api_key_input = gr.Textbox(
+                    label="🔑 OpenAI API Key",
+                    placeholder="Enter your OpenAI API key (starts with sk-)",
+                    type="password",
+                    visible=not api_key_set,
+                    info="🔒 **Security**: Your API key is stored only in this session's memory and will be cleared when you close the app. Get your key from https://platform.openai.com/api-keys"
+                )
+                with gr.Row():
+                    api_key_submit = gr.Button("Set API Key", variant="primary", visible=not api_key_set)
+                    api_key_clear = gr.Button("Clear API Key", variant="stop", visible=api_key_set)
+                api_key_status = gr.Markdown(
+                    value="⚠️ **API Key Required**: Please enter your OpenAI API key to use this app. Your key will NOT be saved or persisted." if not api_key_set else "✅ API key is set for this session only.",
+                    visible=True
+                )
+        
         # Header with title and dark mode toggle
         with gr.Row():
             with gr.Column(scale=4):
@@ -417,28 +467,122 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
                     interactive=False
                 )
         
-        # Event handlers
+        # Function to initialize app with API key
+        def initialize_app(api_key: str, current_buddy):
+            """Initialize SQLQueryBuddy with provided API key."""
+            if current_buddy is not None:
+                return (current_buddy, api_key, gr.update(visible=False), gr.update(visible=False), 
+                       "✅ API key already set!", gr.update(visible=False), gr.update(visible=True))
+            
+            if not api_key or not api_key.strip():
+                return (None, "", gr.update(visible=True), gr.update(visible=True), 
+                       "❌ Please enter a valid API key.", gr.update(visible=True), gr.update(visible=False))
+            
+            api_key = api_key.strip()
+            
+            # Validate key format
+            if not api_key.startswith("sk-"):
+                return (None, "", gr.update(visible=True), gr.update(visible=True), 
+                       "❌ Invalid API key format. Must start with 'sk-'", gr.update(visible=True), gr.update(visible=False))
+            
+            if len(api_key) < 40:
+                return (None, "", gr.update(visible=True), gr.update(visible=True), 
+                       "❌ API key appears incomplete. Please check and try again.", gr.update(visible=True), gr.update(visible=False))
+            
+            try:
+                # Initialize SQLQueryBuddy with API key as parameter
+                # Key is stored only in memory (session state), not persisted
+                new_buddy = SQLQueryBuddy(
+                    database_url=database_url,
+                    api_key=api_key,  # Pass directly, not via environment
+                    vector_db_path=vector_db_path
+                )
+                
+                return (new_buddy, api_key, gr.update(visible=False), gr.update(visible=False), 
+                       "✅ API key set! App initialized successfully. **Note:** Your API key is stored only in this session and will be cleared when you close the app.",
+                       gr.update(visible=False), gr.update(visible=True))
+            except Exception as e:
+                error_msg = f"❌ Error initializing app: {str(e)}"
+                return (None, "", gr.update(visible=True), gr.update(visible=True), error_msg,
+                       gr.update(visible=True), gr.update(visible=False))
+        
+        # Function to process query (with API key check)
+        def process_query_with_check(question: str, history: list, current_buddy, api_key):
+            """Process query, checking if app is initialized."""
+            if current_buddy is None:
+                error_msg = "⚠️ Please set your API key first using the input field above."
+                if not history:
+                    history = []
+                history.append({"role": "user", "content": question})
+                history.append({"role": "assistant", "content": error_msg})
+                return history, "", error_msg, "", ""
+            
+            return current_buddy.process_query(question, history)
+        
+        # Function to clear conversation
+        def clear_conversation_with_check(current_buddy):
+            """Clear conversation if app is initialized."""
+            if current_buddy:
+                return current_buddy.clear_conversation()
+            return gr.update(value=[]), "", "", "", ""
+        
+        # Function to clear/reset API key
+        def clear_api_key(current_buddy, current_api_key):
+            """Clear API key and reset app state."""
+            # Clear the buddy instance (which contains the API key)
+            # This ensures the key is removed from memory
+            return (
+                None,  # Clear buddy state
+                "",  # Clear API key state
+                gr.update(visible=True, value=""),  # Show input field
+                gr.update(visible=True),  # Show submit button
+                gr.update(visible=False),  # Hide clear button
+                "🔒 **API key cleared from memory.** Please enter a new key to continue. Your previous key has been completely removed and is not stored anywhere."
+            )
+        
+        # Function to get optimization suggestions
+        def get_optimization_with_check(sql_query: str, current_buddy):
+            """Get optimization suggestions if app is initialized."""
+            if current_buddy is None:
+                return "⚠️ Please set your API key first to use this feature."
+            return current_buddy.get_optimization_suggestions(sql_query)
+        
+        # API key submit handler
+        api_key_submit.click(
+            fn=initialize_app,
+            inputs=[api_key_input, buddy_state],
+            outputs=[buddy_state, api_key_state, api_key_input, api_key_submit, api_key_status, api_key_clear]
+        )
+        
+        # API key clear handler
+        api_key_clear.click(
+            fn=clear_api_key,
+            inputs=[buddy_state, api_key_state],
+            outputs=[buddy_state, api_key_state, api_key_input, api_key_submit, api_key_clear, api_key_status]
+        )
+        
+        # Event handlers (with API key check)
         submit_btn.click(
-            fn=buddy.process_query,
-            inputs=[question_input, chatbot],
+            fn=process_query_with_check,
+            inputs=[question_input, chatbot, buddy_state, api_key_state],
             outputs=[chatbot, sql_output, gr.Textbox(visible=False), insights_output, explanation_output]
         )
         
         question_input.submit(
-            fn=buddy.process_query,
-            inputs=[question_input, chatbot],
+            fn=process_query_with_check,
+            inputs=[question_input, chatbot, buddy_state, api_key_state],
             outputs=[chatbot, sql_output, gr.Textbox(visible=False), insights_output, explanation_output]
         )
         
         clear_btn.click(
-            fn=buddy.clear_conversation,
-            inputs=[],
+            fn=clear_conversation_with_check,
+            inputs=[buddy_state],
             outputs=[chatbot, sql_output, gr.Textbox(visible=False), insights_output, explanation_output]
         )
         
         optimize_btn.click(
-            fn=buddy.get_optimization_suggestions,
-            inputs=[optimization_input],
+            fn=get_optimization_with_check,
+            inputs=[optimization_input, buddy_state],
             outputs=[optimization_output]
         )
         
@@ -474,30 +618,18 @@ def create_interface(database_url: str, vector_db_path: str = "./vector_store"):
 
 
 if __name__ == "__main__":
-    # Verify API key is set before proceeding
-    try:
-        verify_openai_api_key()
-    except ValueError as e:
-        print(str(e))
-        # For HF Spaces, show error in the interface
-        if os.getenv("SPACE_ID"):
-            with gr.Blocks(title="SQL Query Buddy - Configuration Error") as error_demo:
-                gr.Markdown(f"""
-                # ⚠️ Configuration Error
-                
-                {str(e)}
-                
-                **Quick Fix for Hugging Face Spaces:**
-                1. Go to your Space Settings → Variables and secrets
-                2. Add secret: `OPENAI_API_KEY` = your API key
-                3. Click "Save" and restart the Space
-                """)
-            error_demo.launch()
-        exit(1)
-    
     # Get database URL from environment or use default
     database_url = os.getenv("DATABASE_URL", "sqlite:///sample_database.db")
     vector_db_path = os.getenv("VECTOR_DB_PATH", "./vector_store")
+    
+    # If API key is set, verify it (but don't fail - let user enter it in UI)
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        try:
+            verify_openai_api_key()
+        except ValueError as e:
+            print(f"Warning: {str(e)}")
+            print("User can enter API key in the interface.")
     
     # Create sample database if it doesn't exist (for HF Spaces)
     if database_url.startswith("sqlite:///"):

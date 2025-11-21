@@ -39,6 +39,7 @@ class VectorStoreManager:
     def __init__(
         self,
         database_url: str,
+        api_key: str,
         vector_db_path: str = "./vector_store",
         embedding_model: str = "text-embedding-3-small"
     ):
@@ -47,35 +48,28 @@ class VectorStoreManager:
         
         Args:
             database_url: SQLAlchemy database URL
+            api_key: OpenAI API key (stored only in memory, not persisted)
             vector_db_path: Path to store vector database
             embedding_model: OpenAI embedding model name
         """
+        if not api_key or not api_key.strip():
+            raise ValueError("API key is required")
+        
         self.database_url = database_url
         self.vector_db_path = vector_db_path
         self.embedding_model = embedding_model
-        
-        # Verify API key is set before creating embeddings
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError(
-                "OPENAI_API_KEY not found! Please set it in Hugging Face Spaces "
-                "Settings → Variables and secrets → Repository secrets"
-            )
-        
-        # Clean the API key
-        api_key = api_key.strip()
-        os.environ["OPENAI_API_KEY"] = api_key
+        self.api_key = api_key.strip()  # Store in instance, not environment
         
         # Try new parameter name first, fallback to old
         try:
             self.embeddings = OpenAIEmbeddings(
                 model=embedding_model,
-                openai_api_key=api_key  # Explicitly pass the key
+                openai_api_key=self.api_key  # Pass key directly, not via environment
             )
         except TypeError:
             self.embeddings = OpenAIEmbeddings(
                 model_name=embedding_model,
-                openai_api_key=api_key  # Explicitly pass the key
+                openai_api_key=self.api_key  # Pass key directly, not via environment
             )
         self.schema_loader = SchemaLoader(database_url)
         self.vectorstore: Optional[Chroma] = None
